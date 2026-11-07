@@ -5,7 +5,6 @@ import type * as Leaflet from "leaflet";
 import { buildings, gates, gatePlaces, KIND_LABEL, sites, type Building } from "@/data/buildings";
 import campus from "@/data/campus.json";
 import { dist, findRoute, loadGraph, type LatLng, type Route } from "@/lib/route";
-import { officeLinks } from "@/data/office-links";
 
 const DESKTOP_MIN = 768;
 const TOP_BAR = 76; // phone search bar area
@@ -278,6 +277,14 @@ export default function CampusMap() {
       document.removeEventListener("webkitfullscreenchange", onFs);
     };
   }, []);
+
+  // the map reaches under Safari's bar, which makes the page a little taller than the screen; keep it from moving
+  useEffect(() => {
+    if (!behindBar) return;
+    const stay = () => { if (window.scrollY !== 0) window.scrollTo(0, 0); };
+    window.addEventListener("scroll", stay, { passive: true });
+    return () => window.removeEventListener("scroll", stay);
+  }, [behindBar]);
 
   // re-measure once the map is allowed to run under Safari's bar
   useEffect(() => {
@@ -831,9 +838,9 @@ export default function CampusMap() {
               )}
               <div className="flex flex-1 flex-col justify-between gap-3 p-3.5">
                 <div className="line-clamp-3 text-sm font-semibold leading-snug text-[var(--cm-ink)]">{o}</div>
-                {officeLinks[o] && (
+                {b.officeLinks?.[o] && (
                   <a
-                    href={officeLinks[o]}
+                    href={b.officeLinks?.[o]}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 self-start rounded-full bg-[var(--cm-hover)] px-3 py-1.5 text-left text-xs font-semibold text-[var(--cm-maroon)]"
@@ -931,7 +938,7 @@ export default function CampusMap() {
       ref={rootRef}
       className="cm-root relative h-[100dvh] w-full overflow-hidden bg-[var(--cm-paper)] font-sans"
       style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar
-          ? { position: "fixed", top: 0, left: 0, right: 0, height: "100lvh" } // pinned: can't scroll, runs under Safari's bar
+          ? { height: "100lvh", touchAction: "none" } // runs under Safari's bar; touches here don't scroll the page
           : inFrame
             ? { height: "100%" }
             : {}) }}
@@ -1042,7 +1049,8 @@ export default function CampusMap() {
 
         <div
           className={`min-h-0 flex-1 ${snap === "peek" && dragH == null ? "overflow-hidden" : "overflow-y-auto"}`}
-          style={{ paddingBottom: barCss }}
+          // only the list scrolls; it never hands the scroll on to the page
+          style={{ paddingBottom: barCss, touchAction: "pan-x pan-y", overscrollBehavior: "contain" }}
         >
           {selected ? (
             <div className="flex flex-col gap-5 px-5 pb-6">
