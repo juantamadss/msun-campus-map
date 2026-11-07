@@ -129,6 +129,25 @@ export default function CampusMap() {
       const w = ROAD_WIDTH[r.type] ?? 5;
       L.polyline(r.pts as [number, number][], { color: "#ffffff", weight: w, lineCap: "round", lineJoin: "round", interactive: false }).addTo(map);
     }
+    // names of the campus roads, written along the road at its midpoint
+    for (const r of campus.roads) {
+      if (r.type !== "service" || !r.name) continue;
+      const pts = r.pts as [number, number][];
+      const k = Math.cos((pts[0][0] * Math.PI) / 180);
+      const len = (a: [number, number], b: [number, number]) => Math.hypot((b[0] - a[0]) * 110540, (b[1] - a[1]) * 111320 * k);
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) total += len(pts[i - 1], pts[i]);
+      let i = 1, run = 0;
+      while (i < pts.length - 1 && run + len(pts[i - 1], pts[i]) < total / 2) run += len(pts[i - 1], pts[i++]);
+      const [a, b] = [pts[i - 1], pts[i]];
+      const t = len(a, b) ? (total / 2 - run) / len(a, b) : 0;
+      const mid: [number, number] = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+      let deg = (-Math.atan2((b[0] - a[0]) * 110540, (b[1] - a[1]) * 111320 * k) * 180) / Math.PI;
+      if (deg > 90) deg -= 180;
+      if (deg < -90) deg += 180;
+      const icon = L.divIcon({ className: "", iconSize: [0, 0], html: `<div class="cm-road-label" style="transform:translate(-50%,-50%) rotate(${deg.toFixed(1)}deg)">${r.name}</div>` });
+      L.marker(mid, { icon, keyboard: false, interactive: false }).addTo(map);
+    }
     const placeOf = new Map<string, Building>();
     buildings.forEach((b) => b.shapeIds.forEach((id) => placeOf.set(id, b)));
     // courts / oval first so buildings sit on top of them
@@ -287,6 +306,15 @@ export default function CampusMap() {
       const r = el.getBoundingClientRect();
       const pad = 3;
       const hit = shown.some((o) => r.left < o.right + pad && r.right > o.left - pad && r.top < o.bottom + pad && r.bottom > o.top - pad);
+      if (hit) el.style.visibility = "hidden";
+      else shown.push(r);
+    }
+    // road names give way to building names, and only show when zoomed in
+    const zoomedIn = (mapRef.current?.getZoom() ?? 0) >= 18;
+    for (const el of mapEl.current?.querySelectorAll<HTMLElement>(".cm-road-label") ?? []) {
+      el.style.visibility = "visible";
+      const r = el.getBoundingClientRect();
+      const hit = !zoomedIn || shown.some((o) => r.left < o.right && r.right > o.left && r.top < o.bottom && r.bottom > o.top);
       if (hit) el.style.visibility = "hidden";
       else shown.push(r);
     }

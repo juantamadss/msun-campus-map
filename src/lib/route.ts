@@ -35,7 +35,7 @@ export function dist(a: LatLng, b: LatLng) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
-export function buildGraph(data: { elements?: OsmWay[] }): Graph {
+export function buildGraph(data: { elements?: OsmWay[] }, closed: Set<string> = new Set()): Graph {
   const pos = new Map<number, LatLng>();
   const adj = new Map<number, { to: number; w: number }[]>();
   const segs: [number, number][] = [];
@@ -48,6 +48,7 @@ export function buildGraph(data: { elements?: OsmWay[] }): Graph {
     if (el.type !== "way" || !el.nodes || !el.geometry) continue;
     const hw = el.tags?.highway;
     if (!hw || SKIP.has(hw) || el.tags?.foot === "no" || el.tags?.access === "no") continue;
+    if (el.tags?.name && closed.has(el.tags.name)) continue;
     el.nodes.forEach((id, i) => {
       const g = el.geometry![i];
       if (g) pos.set(id, [g.lat, g.lon]);
@@ -140,10 +141,11 @@ export function findRoute(g: Graph, from: LatLng, to: LatLng): Route | null {
 }
 
 import campus from "@/data/campus.json";
+import { closedRoads } from "@/data/closed-roads";
 
 let cache: Graph | null = null;
 /** Walking network: the campus roads and paths kept or drawn in the editor */
 export async function loadGraph() {
-  cache ??= buildGraph(campus.walk as { elements: OsmWay[] });
+  cache ??= buildGraph(campus.walk as { elements: OsmWay[] }, new Set(closedRoads));
   return cache;
 }
