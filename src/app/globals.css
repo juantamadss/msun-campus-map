@@ -118,6 +118,8 @@ html, body {
   .leaflet-bottom.leaflet-left { left: calc(20rem + 12px); }
 }
 @media (max-width: 767px) {
+  /* the strip behind Safari's see-through bottom bar matches the white card */
+  html, body { background: var(--cm-card); }
   .leaflet-control-zoom { display: none; }
   /* attribution rides just above the bottom sheet */
   .leaflet-bottom.leaflet-left { bottom: var(--cm-sheet, 180px); transition: bottom 0.3s ease-out; }

@@ -7,7 +7,6 @@ import campus from "@/data/campus.json";
 import { dist, findRoute, loadGraph, type LatLng, type Route } from "@/lib/route";
 
 const DESKTOP_MIN = 768;
-const SAFARI_BAR = 84; // room left for Safari's floating address bar on phones
 const TOP_BAR = 76; // phone search bar area
 const DIR_PANEL = 132; // phone From/To panel area
 
@@ -206,8 +205,10 @@ export default function CampusMap() {
   const gpsTried = useRef(false); // asked for GPS once for a route; don't keep re-asking after a refusal
 
   const immersive = isFs || standalone;
-  const barPx = immersive ? 0 : SAFARI_BAR;
-  const barCss = immersive ? "env(safe-area-inset-bottom, 0px)" : `max(env(safe-area-inset-bottom, 0px), ${SAFARI_BAR}px)`;
+  // the map fills 100dvh, which already stops above the browser's bottom bar, so no extra room is needed
+  void immersive;
+  const barPx = 0;
+  const barCss = "env(safe-area-inset-bottom, 0px)";
 
   const filtered = useMemo(() => buildings.filter((b) => matches(b, search)), [search]);
 
@@ -336,7 +337,7 @@ export default function CampusMap() {
       const desktop = window.innerWidth >= DESKTOP_MIN;
       map.fitBounds(L.latLngBounds(buildings.map((b) => [b.lat, b.lng] as [number, number])), {
         paddingTopLeft: desktop ? [360, 60] : [40, TOP_BAR + 20],
-        paddingBottomRight: desktop ? [60, 60] : [40, SAFARI_BAR + 84 + 30],
+        paddingBottomRight: desktop ? [60, 60] : [40, 84 + 30],
         maxZoom: 19,
       });
       drawCampus(L, map); // after the view is set, so layers can be re-ordered
