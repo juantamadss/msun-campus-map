@@ -1,0 +1,121 @@
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Navy & blue */
+:root {
+  --cm-maroon: #1e3a8a;
+  --cm-maroon-deep: #0b1a45;
+  --cm-gold: #60a5fa;
+  --cm-ink: #0f172a;
+  --cm-muted: #64748b;
+  --cm-paper: #eef2f7;
+  --cm-card: #ffffff;
+  --cm-field: #f1f5f9;
+  --cm-hover: #eff4ff;
+  --cm-line: #e5eaf1;
+  --cm-line-strong: #cbd5e1;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--cm-paper);
+  color: var(--cm-ink);
+  font-family: var(--font-sans);
+}
+
+.cm-header {
+  background: linear-gradient(135deg, #2563eb 0%, var(--cm-maroon) 55%, var(--cm-maroon-deep) 100%);
+}
+
+.cm-placeholder {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(96, 165, 250, 0.35), transparent 45%),
+    linear-gradient(135deg, #2563eb 0%, var(--cm-maroon) 55%, var(--cm-maroon-deep) 100%);
+}
+
+/* ---------- Pins ---------- */
+.cm-pin-wrap { background: none; border: none; }
+.cm-pin {
+  width: 30px; height: 30px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--cm-maroon);
+  border: 2.5px solid #fff;
+  box-shadow: 0 3px 8px rgba(10, 20, 50, 0.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.cm-pin span {
+  transform: rotate(45deg);
+  color: #fff; font: 700 12px/1 var(--font-sans);
+}
+.cm-pin-wrap:hover .cm-pin { transform: rotate(-45deg) scale(1.1); }
+.is-active .cm-pin {
+  background: var(--cm-gold);
+  transform: rotate(-45deg) scale(1.25);
+}
+.is-active .cm-pin span { color: var(--cm-ink); }
+
+.leaflet-tooltip.cm-label {
+  background: rgba(255, 255, 255, 0.94);
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(10, 20, 50, 0.25);
+  color: var(--cm-ink);
+  font: 600 11px/1 var(--font-sans);
+  padding: 4px 6px;
+}
+.leaflet-tooltip.cm-label::before { display: none; }
+
+/* ---------- Leaflet controls around the panels ---------- */
+.leaflet-container { font-family: var(--font-sans); background: var(--cm-paper); }
+/* Building names on the map */
+.cm-place-wrap { background: none; border: none; }
+.cm-place {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+  width: max-content; max-width: 120px; text-align: center; cursor: pointer;
+  color: #1e293b; font: 600 11px/1.15 var(--font-sans); letter-spacing: 0.01em;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 4px #fff, 0 0 6px #fff;
+}
+.cm-place-court, .cm-place-field, .cm-place-other { color: #475569; font-weight: 500; font-size: 10.5px; }
+.cm-place:hover { color: #1e3a8a; }
+
+/* Your location (blue dot) */
+.cm-me { position: relative; width: 0; height: 0; }
+.cm-me-dot { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: #2563eb; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(10, 20, 50, 0.45); }
+.cm-me-pulse { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: rgba(37, 99, 235, 0.35); animation: cm-pulse 2s ease-out infinite; }
+.cm-me-cone { display: none; position: absolute; left: 0; top: 0; width: 34px; height: 34px; transform-origin: 50% 100%; transform: translate(-50%, -100%);
+  background: radial-gradient(ellipse at 50% 100%, rgba(37, 99, 235, 0.45), rgba(37, 99, 235, 0) 70%);
+  clip-path: polygon(50% 100%, 10% 0, 90% 0); }
+@keyframes cm-pulse { from { transform: scale(1); opacity: 0.9; } to { transform: scale(3); opacity: 0; } }
+
+/* Locate-me button: above the sheet on phones, beside the zoom buttons on larger screens */
+.cm-locate { position: absolute; right: 12px; bottom: calc(var(--cm-sheet, 180px) + 4px); transition: bottom 0.3s ease-out; }
+@media (min-width: 768px) { .cm-locate { right: auto; left: calc(20rem + 24px); bottom: 96px; } }
+
+/* Gates */
+.cm-gate { transform: translate(-50%, -50%); display: inline-block; white-space: nowrap; border: 2px solid #fff; border-radius: 999px; padding: 2px 6px; color: #fff; font: 700 9.5px/1.2 var(--font-sans); box-shadow: 0 1px 4px rgba(10, 20, 50, 0.4); }
+.leaflet-tooltip.cm-gate-tip { background: #0f172a; color: #fff; border: 0; border-radius: 6px; font: 600 11px var(--font-sans); padding: 4px 7px; }
+.leaflet-tooltip.cm-gate-tip::before { display: none; }
+
+.leaflet-control-zoom a { color: var(--cm-ink) !important; }
+
+@media (min-width: 768px) {
+  .leaflet-bottom.leaflet-left { left: calc(20rem + 12px); }
+}
+@media (max-width: 767px) {
+  .leaflet-control-zoom { display: none; }
+  /* attribution rides just above the bottom sheet */
+  .leaflet-bottom.leaflet-left { bottom: var(--cm-sheet, 180px); transition: bottom 0.3s ease-out; }
+}
+
+/* full-screen button on the tablet layout only shows on touch screens */
+.cm-touch-only { display: none; }
+@media (pointer: coarse) { .cm-touch-only { display: inline-flex; } }
