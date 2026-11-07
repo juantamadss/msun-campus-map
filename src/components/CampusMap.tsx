@@ -256,30 +256,6 @@ export default function CampusMap() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const toggleFullscreen = () => {
-    const d = document as Document & {
-      webkitFullscreenEnabled?: boolean;
-      webkitFullscreenElement?: Element;
-      webkitExitFullscreen?: () => void;
-    };
-    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-    if (document.fullscreenElement || d.webkitFullscreenElement) {
-      (document.exitFullscreen ?? d.webkitExitFullscreen)?.call(document);
-      return;
-    }
-    if (document.fullscreenEnabled || d.webkitFullscreenEnabled) {
-      const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
-      Promise.resolve(req?.call(el)).catch(() => setToast("Full screen isn't available here."));
-      return;
-    }
-    const iPhone = /iPhone|iPod/.test(navigator.userAgent);
-    setToast(
-      iPhone
-        ? "iPhone Safari doesn't allow full screen for websites. Tap Share, then “Add to Home Screen”, and open the map from there for full screen."
-        : "Full screen isn't available in this browser.",
-    );
-  };
-
   // ---- Hide names that would overlap (bigger buildings win) --------------
   const labelOrder = useMemo(() => {
     const area = new Map<string, number>();
@@ -770,17 +746,6 @@ export default function CampusMap() {
     </label>
   );
 
-  const fsButton = (className: string) =>
-    standalone ? null : (
-      <button
-        onClick={toggleFullscreen}
-        aria-label={isFs ? "Exit full screen" : "Full screen"}
-        className={`flex flex-shrink-0 items-center justify-center rounded-full ${className}`}
-      >
-        {isFs ? Icon.shrink : Icon.expand}
-      </button>
-    );
-
   const pill = "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap";
 
   const Photo = (b: Building, rounded: boolean) => (
@@ -933,7 +898,6 @@ export default function CampusMap() {
       <aside className="absolute bottom-3 left-3 top-3 z-[1000] hidden w-80 flex-col overflow-hidden rounded-2xl bg-[var(--cm-card)] shadow-[0_8px_30px_rgba(10,20,50,0.22)] md:flex">
         <header className="cm-header flex items-center justify-between px-5 pb-4 pt-5 text-white">
           <h1 className="text-xl font-bold">Campus Map</h1>
-          <span className="cm-touch-only">{fsButton("h-9 w-9 bg-white/15 text-white hover:bg-white/25")}</span>
         </header>
         <div className="border-b border-[var(--cm-line)] p-3">{searchInput(false)}</div>
         <div className="flex-1 overflow-y-auto">{List}</div>
@@ -984,7 +948,6 @@ export default function CampusMap() {
         ) : (
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">{searchInput(true)}</div>
-            {fsButton("h-12 w-12 bg-[var(--cm-card)] text-[var(--cm-ink)] shadow-[0_2px_10px_rgba(10,20,50,0.22)]")}
           </div>
         )}
       </div>
