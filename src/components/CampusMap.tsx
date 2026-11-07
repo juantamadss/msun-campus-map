@@ -256,6 +256,9 @@ export default function CampusMap() {
       onResize();
     };
     if (ios && !embedded) setBehindBar(true);
+    // inside a website: ask the page how much of the map is behind the browser's bottom bar (the page may load its script late)
+    const ask = () => { try { window.parent.postMessage({ type: "msun-map-ask" }, "*"); } catch {} };
+    const asks = embedded ? [0, 500, 1500, 3000].map((t) => setTimeout(ask, t)) : [];
     setInFrame(embedded);
     requestAnimationFrame(onResize);
     window.addEventListener("message", onMessage);
@@ -270,6 +273,7 @@ export default function CampusMap() {
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs);
     return () => {
+      asks.forEach(clearTimeout);
       window.removeEventListener("message", onMessage);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("resize", onResize);
