@@ -940,7 +940,7 @@ export default function CampusMap() {
       style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar
           ? { height: "100lvh", touchAction: "none" } // runs under Safari's bar; touches here don't scroll the page
           : inFrame
-            ? { height: "100%" }
+            ? { height: "100%", touchAction: "none" } // swipes inside the frame don't drag the website's page
             : {}) }}
     >
       <div ref={mapEl} className="absolute inset-0 z-0" />
