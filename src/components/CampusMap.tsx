@@ -230,7 +230,10 @@ export default function CampusMap() {
       setIsFs(!!(document.fullscreenElement || d.webkitFullscreenElement));
     };
     const nav = navigator as Navigator & { standalone?: boolean };
-    setStandalone(window.matchMedia("(display-mode: standalone)").matches || !!nav.standalone);
+    // inside another site's page (iframe) the host page sets the height, so Safari's bar isn't over the map
+    let embedded = false;
+    try { embedded = window.self !== window.top; } catch { embedded = true; }
+    setStandalone(window.matchMedia("(display-mode: standalone)").matches || !!nav.standalone || embedded);
     window.addEventListener("resize", onResize);
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs);
