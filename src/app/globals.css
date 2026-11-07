@@ -25,8 +25,7 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  /* the map never scrolls as a page; only the card's list scrolls */
-  overflow: hidden;
+  /* no rubber-band bounce; the map itself is pinned to the screen so the page has nothing to scroll */
   overscroll-behavior: none;
   background: var(--cm-paper);
   color: var(--cm-ink);

@@ -5,6 +5,7 @@ import type * as Leaflet from "leaflet";
 import { buildings, gates, gatePlaces, KIND_LABEL, sites, type Building } from "@/data/buildings";
 import campus from "@/data/campus.json";
 import { dist, findRoute, loadGraph, type LatLng, type Route } from "@/lib/route";
+import { officeLinks } from "@/data/office-links";
 
 const DESKTOP_MIN = 768;
 const TOP_BAR = 76; // phone search bar area
@@ -830,12 +831,16 @@ export default function CampusMap() {
               )}
               <div className="flex flex-1 flex-col justify-between gap-3 p-3.5">
                 <div className="line-clamp-3 text-sm font-semibold leading-snug text-[var(--cm-ink)]">{o}</div>
-                <button
-                  onClick={() => startDirections(b, o)}
-                  className="inline-flex items-center gap-1.5 self-start rounded-full bg-[var(--cm-hover)] px-3 py-1.5 text-left text-xs font-semibold text-[var(--cm-maroon)]"
-                >
-                  <span className="flex-shrink-0">{Icon.directions}</span> Visit {officeShort(o)}
-                </button>
+                {officeLinks[o] && (
+                  <a
+                    href={officeLinks[o]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 self-start rounded-full bg-[var(--cm-hover)] px-3 py-1.5 text-left text-xs font-semibold text-[var(--cm-maroon)]"
+                  >
+                    <span className="flex-shrink-0">{Icon.external}</span> Visit {officeShort(o)}
+                  </a>
+                )}
               </div>
             </div>
           ))}
@@ -925,7 +930,11 @@ export default function CampusMap() {
     <div
       ref={rootRef}
       className="cm-root relative h-[100dvh] w-full overflow-hidden bg-[var(--cm-paper)] font-sans"
-      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar ? { height: "100lvh" } : inFrame ? { height: "100%" } : {}) }}
+      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar
+          ? { position: "fixed", top: 0, left: 0, right: 0, height: "100lvh" } // pinned: can't scroll, runs under Safari's bar
+          : inFrame
+            ? { height: "100%" }
+            : {}) }}
     >
       <div ref={mapEl} className="absolute inset-0 z-0" />
 
