@@ -37,6 +37,17 @@ function mapLabel(name: string) {
     .join("");
 }
 
+// Office button label: "Office of …" names and other names of 3+ words use their initials
+// (Office of the Chancellor → OC, Supreme Student Council → SSC); names that already hold an
+// abbreviation (MSUN, IFRD) or are short (Deans Office, E-Library) stay as they are.
+function officeShort(name: string) {
+  const words = name.split(/\s+/).filter(Boolean).map((w) => w.replace(/[^A-Za-z0-9-]/g, ""));
+  const main = words.filter((w) => w && !SMALL_WORDS.has(w.toLowerCase()));
+  const hasAbbrev = words.some((w) => w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w));
+  if (/^office\b/i.test(name) || (main.length >= 3 && !hasAbbrev)) return main.map((w) => w[0].toUpperCase()).join("");
+  return name;
+}
+
 // ---- Icons ---------------------------------------------------------------
 const Icon = {
   search: (
@@ -182,7 +193,11 @@ export default function CampusMap() {
   const [snap, setSnap] = useState<Snap>("peek");
   const [dragH, setDragH] = useState<number | null>(null);
   const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
+  // vh = height of the part of the map above the browser's bottom bar; barPx = how much of the map runs behind that bar
   const [vh, setVh] = useState(() => window.innerHeight);
+  const [barPx, setBarPx] = useState(0);
+  const [behindBar, setBehindBar] = useState(false); // iPhone, opened directly: let the map run under Safari's floating bar
+  const rootRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const [headH, setHeadH] = useState(84);
 
@@ -205,10 +220,8 @@ export default function CampusMap() {
   const gpsTried = useRef(false); // asked for GPS once for a route; don't keep re-asking after a refusal
 
   const immersive = isFs || standalone;
-  // the map fills 100dvh, which already stops above the browser's bottom bar, so no extra room is needed
   void immersive;
-  const barPx = 0;
-  const barCss = "env(safe-area-inset-bottom, 0px)";
+  const barCss = `max(env(safe-area-inset-bottom, 0px), ${barPx}px)`;
 
   const filtered = useMemo(() => buildings.filter((b) => matches(b, search)), [search]);
 
@@ -225,25 +238,48 @@ export default function CampusMap() {
 
   // ---- Window / full screen listeners ----------------------------------
   useEffect(() => {
-    const onResize = () => setVh(window.innerHeight);
+    let embedded = false;
+    try { embedded = window.self !== window.top; } catch { embedded = true; }
+    const ios = /iPhone|iPod/.test(navigator.userAgent);
+    let hostBar = 0; // sent by the website the map is embedded in (see README)
+    const onResize = () => {
+      const rootH = rootRef.current?.clientHeight || window.innerHeight;
+      const bar = embedded ? hostBar : Math.max(0, Math.min(140, rootH - window.innerHeight));
+      setBarPx(bar);
+      setVh(rootH - bar);
+    };
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data as { type?: string; bar?: number } | null;
+      if (!embedded || d?.type !== "msun-map-bar" || typeof d.bar !== "number") return;
+      hostBar = Math.max(0, Math.min(140, Math.round(d.bar)));
+      onResize();
+    };
+    if (ios && !embedded) setBehindBar(true);
+    requestAnimationFrame(onResize);
+    window.addEventListener("message", onMessage);
+    window.visualViewport?.addEventListener("resize", onResize);
     const onFs = () => {
       const d = document as Document & { webkitFullscreenElement?: Element };
       setIsFs(!!(document.fullscreenElement || d.webkitFullscreenElement));
     };
     const nav = navigator as Navigator & { standalone?: boolean };
-    // inside another site's page (iframe) the host page sets the height, so Safari's bar isn't over the map
-    let embedded = false;
-    try { embedded = window.self !== window.top; } catch { embedded = true; }
     setStandalone(window.matchMedia("(display-mode: standalone)").matches || !!nav.standalone || embedded);
     window.addEventListener("resize", onResize);
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs);
     return () => {
+      window.removeEventListener("message", onMessage);
+      window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("fullscreenchange", onFs);
       document.removeEventListener("webkitfullscreenchange", onFs);
     };
   }, []);
+
+  // re-measure once the map is allowed to run under Safari's bar
+  useEffect(() => {
+    if (behindBar) requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }, [behindBar]);
 
   // peek height = the sheet's header (title / route summary)
   useEffect(() => {
@@ -383,7 +419,7 @@ export default function CampusMap() {
     const map = mapRef.current;
     if (!map || !selected || dir) return;
     const W = window.innerWidth;
-    const H = window.innerHeight;
+    const H = vh + barPx; // whole map height, including the part behind the browser bar
     const z = Math.max(map.getZoom(), 19);
     let dx = 0;
     let dy = 0;
@@ -391,7 +427,7 @@ export default function CampusMap() {
       const cardW = Math.min(420, Math.max(320, W * 0.27)) + 12;
       dx = W / 2 - (344 + (W - cardW)) / 2;
     } else {
-      const sheetTop = H - barPx - Math.round(H * 0.5);
+      const sheetTop = vh - Math.round(vh * 0.5);
       dy = H / 2 - (TOP_BAR + sheetTop) / 2;
     }
     const pt = map.project([selected.lat, selected.lng], z).add([dx, dy]);
@@ -773,14 +809,6 @@ export default function CampusMap() {
       <button onClick={() => startDirections(b, b.name)} className={`${pill} bg-[var(--cm-maroon)] text-white`}>
         {Icon.directions} Directions
       </button>
-      <a
-        href={`https://www.google.com/maps/dir/?api=1&destination=${b.lat},${b.lng}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${pill} bg-[var(--cm-hover)] text-[var(--cm-maroon)]`}
-      >
-        {Icon.external} Google Maps
-      </a>
     </div>
   );
 
@@ -802,9 +830,9 @@ export default function CampusMap() {
                 <div className="line-clamp-3 text-sm font-semibold leading-snug text-[var(--cm-ink)]">{o}</div>
                 <button
                   onClick={() => startDirections(b, o)}
-                  className={`${pill} self-start bg-[var(--cm-hover)] px-3 py-1.5 text-xs text-[var(--cm-maroon)]`}
+                  className="inline-flex items-center gap-1.5 self-start rounded-full bg-[var(--cm-hover)] px-3 py-1.5 text-left text-xs font-semibold text-[var(--cm-maroon)]"
                 >
-                  {Icon.directions} Directions
+                  <span className="flex-shrink-0">{Icon.directions}</span> Visit {officeShort(o)}
                 </button>
               </div>
             </div>
@@ -893,8 +921,9 @@ export default function CampusMap() {
   // ---- Layout ----------------------------------------------------------
   return (
     <div
+      ref={rootRef}
       className="cm-root relative h-[100dvh] w-full overflow-hidden bg-[var(--cm-paper)] font-sans"
-      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)` }}
+      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar ? { height: "100lvh" } : {}) }}
     >
       <div ref={mapEl} className="absolute inset-0 z-0" />
 
@@ -1012,8 +1041,8 @@ export default function CampusMap() {
                 </h2>
               )}
               {!dir && Actions(selected)}
-              {Offices(selected)}
               {Photo(selected, true)}
+              {Offices(selected)}
               {Coords(selected)}
             </div>
           ) : (
