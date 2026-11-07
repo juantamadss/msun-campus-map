@@ -25,6 +25,9 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* the map never scrolls as a page; only the card's list scrolls */
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--cm-paper);
   color: var(--cm-ink);
   font-family: var(--font-sans);

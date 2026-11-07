@@ -197,6 +197,7 @@ export default function CampusMap() {
   const [vh, setVh] = useState(() => window.innerHeight);
   const [barPx, setBarPx] = useState(0);
   const [behindBar, setBehindBar] = useState(false); // iPhone, opened directly: let the map run under Safari's floating bar
+  const [inFrame, setInFrame] = useState(false); // embedded in another site: fill the frame exactly
   const rootRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const [headH, setHeadH] = useState(84);
@@ -255,6 +256,7 @@ export default function CampusMap() {
       onResize();
     };
     if (ios && !embedded) setBehindBar(true);
+    setInFrame(embedded);
     requestAnimationFrame(onResize);
     window.addEventListener("message", onMessage);
     window.visualViewport?.addEventListener("resize", onResize);
@@ -278,8 +280,8 @@ export default function CampusMap() {
 
   // re-measure once the map is allowed to run under Safari's bar
   useEffect(() => {
-    if (behindBar) requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
-  }, [behindBar]);
+    if (behindBar || inFrame) requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }, [behindBar, inFrame]);
 
   // peek height = the sheet's header (title / route summary)
   useEffect(() => {
@@ -923,7 +925,7 @@ export default function CampusMap() {
     <div
       ref={rootRef}
       className="cm-root relative h-[100dvh] w-full overflow-hidden bg-[var(--cm-paper)] font-sans"
-      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar ? { height: "100lvh" } : {}) }}
+      style={{ ["--cm-sheet" as string]: `calc(${sheetH}px + ${barCss} + 8px)`, ...(behindBar ? { height: "100lvh" } : inFrame ? { height: "100%" } : {}) }}
     >
       <div ref={mapEl} className="absolute inset-0 z-0" />
 
