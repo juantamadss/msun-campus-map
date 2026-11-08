@@ -20,6 +20,8 @@ export interface Building {
   officeImages?: Record<string, string>;
   /** office name → its web page (set in the editor); offices without one get no Visit button */
   officeLinks?: Record<string, string>;
+  /** more photos after the cover (`image`), set in the editor */
+  gallery?: string[];
   image?: string;
   /** Which location this place belongs to (e.g. "main-campus") */
   site?: string;
@@ -45,6 +47,7 @@ export const buildings: Building[] = campus.places.map((p) => ({
   officeImages: Object.fromEntries(Object.entries((p.officeImages ?? {}) as Record<string, string>).map(([k, v]) => [k, BASE + v])),
   officeLinks: (p.officeLinks ?? {}) as Record<string, string>,
   image: withBase(p.image ?? IMAGES[p.id]),
+  gallery: (((p as { gallery?: string[] }).gallery ?? []) as string[]).map((g) => BASE + g),
   site: (p as { site?: string }).site,
 }));
 

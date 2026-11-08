@@ -181,6 +181,7 @@ export default function CampusMap() {
   }
 
   const [selected, setSelected] = useState<Building | null>(null);
+  const [viewer, setViewer] = useState<{ name: string; photos: string[]; index: number } | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [dir, setDir] = useState<Dir | null>(null);
@@ -818,6 +819,72 @@ export default function CampusMap() {
     </div>
   );
 
+  const photosOf = (b: Building) => [b.image, ...(b.gallery ?? [])].filter((x): x is string => !!x);
+  const openViewer = (b: Building, index: number) => setViewer({ name: b.name, photos: photosOf(b), index });
+
+  // Phone card: photos side by side, scrolling sideways (big first photo, then pairs stacked)
+  const PhotoStrip = (b: Building) => {
+    const ph = photosOf(b);
+    if (ph.length <= 1)
+      return ph.length ? (
+        <button type="button" onClick={() => openViewer(b, 0)} className="block w-full text-left" aria-label={`View photo of ${b.name}`}>
+          {Photo(b, true)}
+        </button>
+      ) : (
+        Photo(b, true)
+      );
+    const tile = (src: string, i: number, cls: string) => (
+      <button
+        key={src}
+        type="button"
+        onClick={() => openViewer(b, i)}
+        className={`overflow-hidden rounded-2xl bg-[var(--cm-field)] ${cls}`}
+        aria-label={`View photo ${i + 1} of ${ph.length}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+      </button>
+    );
+    const rest = ph.slice(1);
+    const cols: number[][] = [];
+    for (let i = 0; i < rest.length; i += 2) cols.push([i + 1, i + 2].filter((k) => k < ph.length));
+    return (
+      <div className="-mx-5 flex h-[210px] snap-x scroll-px-5 gap-2 overflow-x-auto px-5 [scrollbar-width:none]">
+        {tile(ph[0], 0, "h-full w-[68%] flex-shrink-0 snap-start")}
+        {cols.map((c) => (
+          <div key={c[0]} className="flex h-full w-[40%] flex-shrink-0 snap-start flex-col gap-2">
+            {c.map((k) => tile(ph[k], k, c.length === 1 ? "h-full w-full" : "h-[calc(50%-4px)] w-full"))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Desktop card: every photo in a grid below the offices
+  const GallerySection = (b: Building) => {
+    const ph = photosOf(b);
+    if (ph.length < 2) return null;
+    return (
+      <div>
+        <div className="mb-2 text-base font-bold text-[var(--cm-ink)]">Gallery</div>
+        <div className="grid grid-cols-3 gap-2">
+          {ph.map((src, i) => (
+            <button
+              key={src}
+              type="button"
+              onClick={() => openViewer(b, i)}
+              className="aspect-square overflow-hidden rounded-xl bg-[var(--cm-field)] hover:opacity-90"
+              aria-label={`View photo ${i + 1} of ${ph.length}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const Actions = (b: Building) => (
     <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
       <button onClick={() => startDirections(b, b.name)} className={`${pill} bg-[var(--cm-maroon)] text-white`}>
@@ -971,7 +1038,13 @@ export default function CampusMap() {
             </div>
           ) : (
             <div className="relative">
-              {Photo(selected, false)}
+              {selected.image ? (
+                <button type="button" onClick={() => openViewer(selected, 0)} className="block w-full" aria-label={`View photo of ${selected.name}`}>
+                  {Photo(selected, false)}
+                </button>
+              ) : (
+                Photo(selected, false)
+              )}
               <button
                 onClick={closeBuilding}
                 aria-label="Close"
@@ -990,6 +1063,7 @@ export default function CampusMap() {
             </div>
             {!dir && Actions(selected)}
             {Offices(selected)}
+            {!dir && GallerySection(selected)}
             {dir && Photo(selected, true)}
             {Coords(selected)}
           </div>
@@ -1064,7 +1138,7 @@ export default function CampusMap() {
                 </h2>
               )}
               {!dir && Actions(selected)}
-              {Photo(selected, true)}
+              {PhotoStrip(selected)}
               {Offices(selected)}
               {Coords(selected)}
             </div>
@@ -1095,6 +1169,69 @@ export default function CampusMap() {
           </button>
         </div>
       )}
+
+      {/* ===== Photo viewer ===== */}
+      {viewer && <PhotoViewer {...viewer} onClose={() => setViewer(null)} />}
+    </div>
+  );
+}
+
+/** Full-screen photos: swipe (or arrow keys / buttons) between them */
+function PhotoViewer({ name, photos, index, onClose }: { name: string; photos: string[]; index: number; onClose: () => void }) {
+  const track = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState(index);
+  const go = useCallback((i: number) => {
+    const el = track.current;
+    if (!el) return;
+    const k = Math.max(0, Math.min(photos.length - 1, i));
+    el.scrollTo({ left: k * el.clientWidth, behavior: "smooth" });
+  }, [photos.length]);
+  useEffect(() => {
+    const el = track.current;
+    if (el) el.scrollLeft = index * el.clientWidth;
+  }, [index]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") go(at + 1);
+      else if (e.key === "ArrowLeft") go(at - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [at, go, onClose]);
+  const arrow = "absolute top-1/2 hidden h-11 w-11 text-3xl leading-none -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 disabled:opacity-0 md:flex";
+  return (
+    <div className="fixed inset-0 z-[3000] flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label={`Photos of ${name}`}>
+      <div className="flex items-center gap-3 px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">{name}</div>
+          {photos.length > 1 && <div className="text-xs text-white/60">{at + 1} / {photos.length}</div>}
+        </div>
+        <button onClick={onClose} aria-label="Close photos" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 hover:bg-white/25">
+          {Icon.close}
+        </button>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={track}
+          onScroll={(e) => { const el = e.currentTarget; setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }}
+          className="flex h-full snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]"
+          style={{ touchAction: "pan-x pan-y pinch-zoom", overscrollBehavior: "contain" }}
+        >
+          {photos.map((src) => (
+            <div key={src} className="flex h-full w-full flex-shrink-0 snap-center items-center justify-center p-2 pb-[max(8px,env(safe-area-inset-bottom))]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+          ))}
+        </div>
+        {photos.length > 1 && (
+          <>
+            <button onClick={() => go(at - 1)} disabled={at === 0} aria-label="Previous photo" className={`${arrow} left-4`}>‹</button>
+            <button onClick={() => go(at + 1)} disabled={at === photos.length - 1} aria-label="Next photo" className={`${arrow} right-4`}>›</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

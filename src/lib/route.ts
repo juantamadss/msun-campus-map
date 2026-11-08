@@ -13,11 +13,15 @@ interface OsmWay {
 /** A one-way gate on the segment a–b; a is the campus side, tg is where the gate sits (0 = a, 1 = b) */
 interface OneWay { a: number; b: number; tg: number; noIn: boolean; noOut: boolean }
 
+/** A fenced campus area (main campus, IDS…): its outline, gates, and whether roads run inside it */
+interface Area { poly: LatLng[]; gates: { pt: LatLng; use: string }[]; inner: [number, number][] }
+
 export interface Graph {
   pos: Map<number, LatLng>;
   adj: Map<number, { to: number; w: number }[]>;
   segs: [number, number][];
   oneway: Map<string, OneWay>;
+  areas: Area[];
 }
 
 export interface GateRule { point: number[]; use: string }
@@ -98,7 +102,7 @@ export function buildGraph(
       segs.push([a, b]);
     }
   }
-  const g: Graph = { pos, adj, segs, oneway };
+  const g: Graph = { pos, adj, segs, oneway, areas: [] };
 
   // Entrance-only and exit-only gates: allow crossing them in one direction only
   const inside = (p: LatLng) => areas.some((poly) => inPoly(p, poly));
@@ -115,16 +119,38 @@ export function buildGraph(
     const [from, to] = noIn ? [b, a] : [a, b]; // the direction that's not allowed
     adj.set(from, (adj.get(from) ?? []).filter((e) => e.to !== to));
   }
+
+  // Campus areas: which gates open into each one (on or within 30 m of its outline), and which roads run inside
+  for (const poly of areas) {
+    const near = gateRules.filter((gt) => {
+      const p = gt.point as LatLng;
+      if (inPoly(p, poly)) return true;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if (segDist(p, poly[j], poly[i]) < 30) return true;
+      return false;
+    });
+    g.areas.push({
+      poly,
+      gates: near.map((gt) => ({ pt: gt.point as LatLng, use: gt.use })),
+      inner: segs.filter(([a, b]) => inPoly(pos.get(a)!, poly) && inPoly(pos.get(b)!, poly)),
+    });
+  }
   return g;
 }
 
+function segDist(p: LatLng, a: LatLng, b: LatLng) {
+  const [ax, ay] = toXY(p, a), [bx, by] = toXY(p, b);
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
 // Nearest point on any walkway segment to p
-function snap(g: Graph, p: LatLng) {
+function snap(g: Graph, p: LatLng, only?: [number, number][]) {
   // work in local metres (fine at campus scale)
   const kx = 111320 * Math.cos((p[0] * Math.PI) / 180);
   const ky = 110540;
   let best = { d: Infinity, seg: [0, 0] as [number, number], pt: p as LatLng };
-  for (const [a, b] of g.segs) {
+  for (const [a, b] of only ?? g.segs) {
     const A = g.pos.get(a)!;
     const B = g.pos.get(b)!;
     const ax = (A[1] - p[1]) * kx, ay = (A[0] - p[0]) * ky;
@@ -139,11 +165,51 @@ function snap(g: Graph, p: LatLng) {
   return best;
 }
 
-/** Returns null if there's no walkway data or no connected path. */
+type Snap = ReturnType<typeof snap>;
+const areaOf = (g: Graph, p: LatLng) => g.areas.findIndex((a) => inPoly(p, a.poly));
+
+/**
+ * Returns null if there's no walkway data or no connected path.
+ * A place inside a campus area is reached (or left) through that area's gates, unless a road inside the area gets there.
+ */
 export function findRoute(g: Graph, from: LatLng, to: LatLng): Route | null {
   if (!g.segs.length) return null;
-  const s = snap(g, from);
-  const e = snap(g, to);
+  const fa = areaOf(g, from), ta = areaOf(g, to);
+
+  // how to join the road network at one end: [road snap, extra straight leg via a gate (or none)]
+  type End = { snap: Snap; gate?: LatLng };
+  const ends = (p: LatLng, ai: number, leaving: boolean): End[] => {
+    const plain = snap(g, p);
+    if (ai < 0) return [{ snap: plain }];
+    const area = g.areas[ai];
+    if (inPoly(plain.pt, area.poly)) return [{ snap: plain }]; // nearest road is inside the area
+    // otherwise: a road inside the area, or one of its gates, whichever makes the shorter trip
+    const options: End[] = [];
+    if (area.inner.length) {
+      const inner = snap(g, p, area.inner);
+      if (inner.d < 150) options.push({ snap: inner });
+    }
+    const ok = area.gates.filter((gt) => (leaving ? gt.use !== "entrance" : gt.use !== "exit"));
+    options.push(...ok.map((gt) => ({ snap: snap(g, gt.pt), gate: gt.pt })).filter((x) => x.snap.d < 25));
+    return options.length ? options : [{ snap: plain }];
+  };
+
+  // both ends inside the same area with no road inside it: walk straight across
+  if (fa >= 0 && fa === ta && !g.areas[fa].inner.length) return { line: [from, to], meters: dist(from, to) };
+
+  let best: Route | null = null;
+  for (const a of ends(from, fa, true))
+    for (const b of ends(to, ta, false)) {
+      const r = core(g, a.gate ?? from, b.gate ?? to, a.snap, b.snap);
+      if (!r) continue;
+      const line = [...(a.gate ? [from] : []), ...r.line, ...(b.gate ? [to] : [])];
+      const meters = r.meters + (a.gate ? dist(from, a.gate) : 0) + (b.gate ? dist(b.gate, to) : 0);
+      if (!best || meters < best.meters) best = { line, meters };
+    }
+  return best;
+}
+
+function core(g: Graph, from: LatLng, to: LatLng, s: Snap, e: Snap): Route | null {
 
   // Temporary nodes at the snapped points, joined to their segment ends
   // temporary start/end node ids; must never clash with real node ids (drawn roads use small negative ids)
